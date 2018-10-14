@@ -1,0 +1,19 @@
+EXP_DIR: classification
+TASK: "classification"
+SUBTASK: "default"
+WRITE_RESULTS: True
+CLS_PROBS: "cls_prob"
+CROPPED_IMAGE_SIZE: 28
+TRAIN:
+   BATCH_SIZE: 1
+   CLS:
+      BATCH_SIZE: 1
+   MAX_SIZE: 28
+   SCALES: !!python/list [28,]
+TEST:
+   BATCH_SIZE: 1
+   SCALES: !!python/list [28,]
+   MAX_SIZE: 28
+   CLASSIFICATION:
+      TASK: "tp_fn"
+      PROPOSAL_METHOD: gt

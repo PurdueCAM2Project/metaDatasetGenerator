@@ -2,16 +2,17 @@ EXP_DIR: classification
 TASK: "classification"
 SUBTASK: "tp_fn"
 WRITE_RESULTS: True
+CLS_PROBS: "loss_cls"
 TRAIN:
    BATCH_SIZE: 10
    CLS:
       BATCH_SIZE: 10
-   MAX_SIZE: 400
-   SCALES: !!python/list [400,]
+   MAX_SIZE: 28
+   SCALES: !!python/list [28,]
 TEST:
    BATCH_SIZE: 1
-   SCALES: !!python/list [400,]
-   MAX_SIZE: 400
+   SCALES: !!python/list [28,]
+   MAX_SIZE: 28
    CLASSIFICATION:
       TASK: "tp_fn"
       PROPOSAL_METHOD: gt

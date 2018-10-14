@@ -3,8 +3,8 @@ PATH_ROOT: /home/gauenk/Documents/data/ilsvrc/ILSVRC/
 PATH_TO_IMAGES: /home/gauenk/Documents/data/ilsvrc/ILSVRC/Data/DET/
 PATH_TO_ANNOTATIONS: /home/gauenk/Documents/data/ilsvrc/ILSVRC/Annotations/DET/
 PATH_TO_IMAGESETS: /home/gauenk/Documents/data/ilsvrc/ILSVRC/ImageSets/DET/
-PATH_TO_RESULTS: /home/gauenk/Documents/data/ilsvrc/ILSVRC/results
-CLASSES: /home/gauenk/Documents/data/ilsvrc/ILSVRC/classes.txt
+PATH_TO_RESULTS: /home/gauenk/Documents/data/ilsvrc/ILSVRC/det_results/
+CLASSES: /home/gauenk/Documents/data/ilsvrc/ILSVRC/det_classes.txt
 COMPID: meaninglessPrefix
 IMAGE_TYPE: .JPEG
 ANNOTATION_TYPE: xml
@@ -13,4 +13,4 @@ CONVERT_TO_PERSON:
 IMAGE_INDEX_TO_IMAGE_PATH: default
 ONLY_PERSON: True
 USE_IMAGE_SET: True
-CONVERT_ID_TO_CLS_FILE: imagenet_idToCls.yml
+CONVERT_ID_TO_CLS_FILE: imagenet_det_idToCls.yml

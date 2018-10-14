@@ -12,6 +12,7 @@ from core.config import cfg
 import roi_data_layer.roidb as rdl_roidb
 import cls_data_layer.roidb as cls_roidb
 import alcls_data_layer.roidb as alcls_roidb
+import aim_data_layer.roidb as aim_roidb
 import vae_data_layer.roidb as vae_rdl_roidb
 from utils.timer import Timer
 from datasets import ds_utils
@@ -65,18 +66,30 @@ class SolverWrapper(object):
         if cfg.TASK == "object_detection":
             self.solver.net.layers[0].set_roidb(roidb)
         elif cfg.TASK == "classification" or cfg.TASK == "regeneration":
-            person_records = ds_utils.loadEvaluationRecords("person")
-            # write_keys_to_csv(person_records)
-            # write_roidb_ids_to_csv(roidb)
-            # sys.exit()
-            tmp = person_records.keys()
-            print(len(tmp),len(roidb))
-            print("they don't need to be equal")
-            print("the left number has a one-to-many mapping")
-            if self.solver.net.layers[0].name == "AlclsDataLayer":
-                self.solver.net.layers[0].set_roidb(roidb, person_records,al_net)
+            if cfg.SUBTASK == "tp_fn":
+                person_records = ds_utils.loadEvaluationRecords("person")
+                # write_keys_to_csv(person_records)
+                # write_roidb_ids_to_csv(roidb)
+                # sys.exit()
+                tmp = person_records.keys()
+                print(len(tmp),len(roidb))
+                print("they don't need to be equal")
+                print("the left number has a one-to-many mapping")
+                if self.solver.net.layers[0].name == "AlclsDataLayer":
+                    self.solver.net.layers[0].set_roidb(roidb, person_records,al_net)
+                elif self.solver.net.layers[0].name == "AimDataLayer":
+                    self.solver.net.layers[0].set_roidb(roidb, person_records,al_net)
+                elif self.solver.net.layers[0].name == "ClsDataLayer":
+                    self.solver.net.layers[0].set_roidb(roidb, person_records)
+                else:
+                    print("WE DONT KNOW THE FIRST LAYER TYPE")
+                    print(self.solver.net.layers[0].name)
+                    print("PROG. QUITTING")
+                    sys.exit()
             else:
-                self.solver.net.layers[0].set_roidb(roidb, person_records)
+                print("NOT LOADING PERSON RECORDS SINCE cfg.SUBTASK == '{}'".\
+                      format(cfg.SUBTASK))
+                self.solver.net.layers[0].set_roidb(roidb,None)
 
 
     def snapshot(self):
@@ -141,7 +154,10 @@ class SolverWrapper(object):
             timer.toc()
 
             if self.solver.iter % (10 * self.solver_param.display) == 0:
-                self.view_sigmoid_output()
+                if 'Sigmoid' in self.solver.net.layers[-1].name:
+                    self.view_sigmoid_output()
+                elif 'Softmax' in self.solver.net.layers[-1].name:
+                    self.view_softmax_output()
                 print('speed: {:.3f}s / iter'.format(timer.average_time))
 
             if self.solver.iter % cfg.TRAIN.SNAPSHOT_ITERS == 0:
@@ -222,6 +238,25 @@ class SolverWrapper(object):
         np.set_printoptions(precision=3,suppress=True)
         print("Sigmoid output v.s. Labels: ")
         print(np.c_[top[0].data, labels])
+
+    def view_softmax_output(self):
+        net = self.solver.net
+        lp = caffe_pb2.LayerParameter()
+        lp.type = "Softmax"
+        layer = caffe.create_layer(lp)
+        bottom = [net.blobs['cls_score']]
+        top = [caffe.Blob([])]
+        labels = net.blobs['labels'].data
+        layer.SetUp(bottom, top)
+        layer.Reshape(bottom, top)
+        layer.Forward(bottom, top)
+        np.set_printoptions(precision=3,suppress=True)
+        print("Softmax output v.s. Labels: ")
+        # print(np.sum(top[0].data,axis=1))
+        # print(np.sum(top[0].data,axis=0))
+        # print(top[0].data.shape)
+        # print(np.c_[top[0].data, labels])
+        print(np.c_[np.argmax(top[0].data,axis=1), labels])
 
 
 def get_training_roidb(imdb):

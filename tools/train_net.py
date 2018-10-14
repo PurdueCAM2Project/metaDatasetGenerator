@@ -59,13 +59,13 @@ def parse_args():
     parser.add_argument('--solver_state', dest='solver_state',
                         help='initialize with a previous solver state',
                         default=None, type=str)
+    # params for model to which active learning is applied
     parser.add_argument('--al_def', dest='al_def',
-                        help='active learning model prototxt',
+                        help='model prototxt to which active learning is applied',
                         default=None, type=str)
     parser.add_argument('--al_net', dest='al_net',
-                        help='active learning model weights',
+                        help='model weights to which active learning is applied',
                         default=None, type=str)
-
     # mixed dataset parameters
     parser.add_argument('--setID', dest='setID',
                         help='which 8 digit ID to read from',
@@ -76,6 +76,14 @@ def parse_args():
     parser.add_argument('--size', dest='size',
                         help='which size to read from',
                         default=1000, type=int)
+    # allow for different path to imagesets:
+    parser.add_argument('--new_path_to_imageset',dest='new_path_to_imageset',
+                        help='redirect the path from which the imdb will find the imagesets in',
+                        default=None,type=str)
+    # change the name of the saved model
+    parser.add_argument('--snapshot_infix',dest='snapshot_infix',
+                        help='add an infix to the snapshot name',
+                        default=None,type=str)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -84,14 +92,13 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def get_roidb(imdb_name):
-    imdb = get_repo_imdb(imdb_name)
+def get_roidb(imdb_name,args):
+    imdb = get_repo_imdb(imdb_name,args.new_path_to_imageset)
     print 'Loaded dataset `{:s}` for training'.format(imdb.name)
     imdb.set_proposal_method(cfg.TRAIN.OBJ_DET.PROPOSAL_METHOD)
     print 'Set proposal method: {:s}'.format(cfg.TRAIN.OBJ_DET.PROPOSAL_METHOD)
     roidb = get_training_roidb(imdb)
     return imdb, roidb
-
 
 def prepare_onlyA_roidb(roidb):
     # see "prepate_roidb" for origianl function when imdb is passed in
@@ -127,7 +134,7 @@ def get_imdb_dataset(args):
     imdb_name = args.imdb_name
     imdb_size = args.imdb_size
     cfg.TRAIN.CLIP_SIZE = imdb_size
-    imdb,roidb = get_roidb(imdb_name)
+    imdb,roidb = get_roidb(imdb_name,args)
     output_dir = get_output_dir(imdb)
     print("final roidb_size: {}".format(len(roidb)))
     return imdb,roidb,output_dir
@@ -161,6 +168,8 @@ if __name__ == '__main__':
     if args.set_cfgs is not None:
         cfg_from_list(args.set_cfgs)
     set_global_cfg("TRAIN")
+    if args.snapshot_infix is not None:
+        cfg.TRAIN.SNAPSHOT_INFIX = args.snapshot_infix
 
     cfg.GPU_ID = args.gpu_id
     if args.solver_state == "None": args.solver_state = None

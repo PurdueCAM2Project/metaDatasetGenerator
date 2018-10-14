@@ -19,14 +19,16 @@ from datasets.imageReader.rawReader import rawReader
 from datasets.annoReader.xmlReader import xmlReader
 from datasets.annoReader.txtReader import txtReader
 from datasets.annoReader.jsonReader import jsonReader
+from datasets.annoReader.pathDerivedReader import pdReader
 
 class RepoImdb(imdb):
     """Image database."""
 
-    def __init__(self, datasetName, imageSet, configName):
+    def __init__(self, datasetName, imageSet, configName, path_to_imageSets=None):
         imdb.__init__(self, datasetName)
         cfg.CALLING_DATASET_NAME = datasetName
         cfg.CALLING_IMAGESET_NAME = imageSet
+        self._path_to_imageSets = path_to_imageSets
         self._local_path = os.path.dirname(__file__)
         self._datasetName = datasetName
         self._configName = configName
@@ -59,7 +61,8 @@ class RepoImdb(imdb):
                             'annotations_cache',\
                                 self._image_set)
 
-        self._path_to_imageSets = cfgData['PATH_TO_IMAGESETS']
+        if self._path_to_imageSets is None:
+            self._path_to_imageSets = cfgData['PATH_TO_IMAGESETS']
         if not self._checkImageSet():
             raise ValueError("imageSet path {} doesn't exist".format(self._imageSetPath))
 
@@ -165,6 +168,10 @@ class RepoImdb(imdb):
         elif annoType == "cls_txt": return txtReader(path,self.classes,self._datasetName,
                                                      self.config['setID'],anno_type='cls',
                                                      is_image_index_flattened =  self.is_image_index_flattened)
+        elif annoType == "cls_derived": return pdReader(path,self.classes,self._datasetName,
+                                                        self.config['setID'],
+                                                        convertIdToCls=self._convertIdToCls,
+                                                        is_image_index_flattened =  self.is_image_index_flattened)
         elif annoType == "json": return jsonReader(path,self.classes,self._datasetName,
                                                    self.config['setID'],self._image_set,
                                                    convertToPerson=convertToPerson,
@@ -210,6 +217,9 @@ class RepoImdb(imdb):
         if self.annoReader: self.annoReader._is_image_index_flattened = state
         if self.evaluator: self.evaluator._is_image_index_flattened = state
         if self.imgReader: self.imgReader._is_image_index_flattened = state
+        
+    def _update_path_to_imagesets(self,new_path_to_imagesets):
+        self._path_to_imagesets = new_path_to_imagesets
         
     def _load_image_index(self):
         """

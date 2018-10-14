@@ -393,6 +393,7 @@ __C.ROTATE_PATH = "./output/rotate/"
 
 # a switching condition for different goals in training/testing
 __C.TASK = "object_detection"
+__C.SUBTASK = "default"
 
 # string name of the output layer's probability vectore
 __C.CLS_PROBS = "cls_prob"
@@ -408,6 +409,13 @@ def GET_SAVE_ACTIVITY_VECTOR_BLOBS_DIR():
 __C.GET_SAVE_ACTIVITY_VECTOR_BLOBS_DIR = GET_SAVE_ACTIVITY_VECTOR_BLOBS_DIR
 __C.SAVE_ACTIVITY_VECTOR_BLOBS = [] # the list of blobs to save
 
+# Active Learning Settings
+__C.ACTIVE_LEARNING = edict()
+__C.ACTIVE_LEARNING.N_ITERS = 11000
+__C.ACTIVE_LEARNING.VAL_SIZE = 30000
+__C.ACTIVE_LEARNING.SUBSET_SIZE = 500
+__C.ACTIVE_LEARNING.N_COVERS = 300
+__C.ACTIVE_LEARNING.REPORT = False
 
 def get_output_dir(imdb_name, net=None):
     """Return the directory where experimental artifacts are placed.
@@ -489,6 +497,11 @@ def cfgData_from_file(filename):
         yaml_cfg = edict(yaml.load(f))
 
     _merge_a_into_b(yaml_cfg, __C.DATASETS)
+    
+    useClsDerived_Imagenet = (cfg.CALLING_DATASET_NAME == "imagenet_cls") and \
+                             ("train" in cfg.CALLING_IMAGESET_NAME)
+    if useClsDerived_Imagenet:
+        cfgData['ANNOTATION_TYPE'] = "cls_derived"
     load_tp_fn_record_path()
 
 def cfg_from_list(cfg_list):

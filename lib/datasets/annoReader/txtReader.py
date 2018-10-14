@@ -61,6 +61,7 @@ class txtReader(object):
         with open(filename,"r") as f:
             annos = f.readlines()
             return {'gt_classes': np.array(annos,dtype=np.uint8),
+                    'boxes': [None],
                     'flipped' : False,
                     'set' : self._setID}
 

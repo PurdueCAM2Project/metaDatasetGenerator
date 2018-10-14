@@ -11,7 +11,7 @@ from core.config import cfg, get_output_dir
 from fast_rcnn.bbox_transform import clip_boxes, bbox_transform_inv
 import argparse
 from utils.timer import Timer
-from utils.misc import getRotationScale,toRadians,getRotationInfo,print_net_activiation_data,save_image_with_border
+from utils.misc import getRotationScale,toRadians,getRotationInfo,print_net_activiation_data,save_image_with_border,createAlReportHeader,transformField,openAlResultsCsv,startAlReport,computeEntopy
 import numpy as np
 import cv2
 import caffe
@@ -393,6 +393,14 @@ def test_net(net, imdb, max_per_image=100, thresh=1/80., vis=False, al_net=None)
 
     # timers
     _t = {'im_detect' : Timer(), 'misc' : Timer()}
+    
+    # information to generate Active Learning Report
+    fidAlReport = None
+    pctErrorRed = None
+    if cfg.ACTIVE_LEARNING.REPORT:
+        pctErrorRed = openAlResultsCsv()
+        fidAlReport = startAlReport(imdb,net)
+
 
     im_rotates_all = dict.fromkeys(imdb.image_index)
 
@@ -429,6 +437,9 @@ def test_net(net, imdb, max_per_image=100, thresh=1/80., vis=False, al_net=None)
         elif cfg.TASK == 'classification':
             aggregateClassification(imdb,scores,all_items,i)
 
+        if cfg.ACTIVE_LEARNING.REPORT:
+            recordImageForAlReport(imdb,scores,activity_vectors,fidAlReport,i,pctErrorRed)
+            
         _t['misc'].toc()
         print 'im_detect: {:d}/{:d} {:.3f}s {:.3f}s' \
               .format(i + 1, num_images, _t['im_detect'].average_time,
@@ -490,14 +501,27 @@ def aggregateAV(ds_av,activity_vectors,image_id):
         ds_av[blob_name][image_id] = blob_av
 
 def aggregateClassification(imdb,scores,all_items,i):
-    print(scores.shape)
+    scores = np.squeeze(scores)
     if imdb.num_classes == 1:
         all_items[0][i] = float(scores[0])
     else:
-        for j in xrange(1, imdb.num_classes):
-            all_items[j][i] = float(scores[j-1])
+        for j in xrange(0, imdb.num_classes):
+            all_items[j][i] = float(scores[j])
+    
+def recordImageForAlReport(imdb,scores,activity_vectors,fidAlReport,i,pctErrorRed):
+    scores = np.squeeze(scores)
+    image_index = imdb.image_index[i]
+    imageStr = "{},".format(image_index)
+    for score in scores:
+        imageStr += "{:.5f},".format(score)
+    scoreEntropy = computeEntopy(scores)
+    imageStr += "{:.5f},".format(scoreEntropy)
+    for idx,av_blobNamed in enumerate(cfg.SAVE_ACTIVITY_VECTOR_BLOBS):
+        avValue = transformField(activity_vectors[idx])
+        imageStr += "{:.5f},".format(avValue)
+    imageStr += "{:.5f}\n".format(pctErrorRed[image_index]['ave'])
+    fidAlReport.write(imageStr)
 
     
-
 
 

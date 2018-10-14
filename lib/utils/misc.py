@@ -1,4 +1,4 @@
-import sys,os,pickle,uuid,cv2,glob
+import sys,os,pickle,uuid,cv2,glob,csv
 import matplotlib.pyplot as plt
 import os.path as osp
 import numpy as np
@@ -390,6 +390,59 @@ def evaluate_image_detections(roidb,cls_dets):
         found[jmax] = 1
     return found
 
+def openAlResultsCsv():
+    alResults = {}
+    fn = "resultsAL_{}_{}_{}_{}.csv".format(
+        cfg.ACTIVE_LEARNING.N_ITERS,
+        cfg.ACTIVE_LEARNING.VAL_SIZE,
+        cfg.ACTIVE_LEARNING.SUBSET_SIZE,
+        cfg.ACTIVE_LEARNING.N_COVERS)
+    with open(fn,"r") as f:
+        csv_reader = csv.reader(f,delimiter=',')
+        for line_num,row in enumerate(csv_reader):
+            if line_num == 0: continue
+            image_index = row[0]
+            if row[1] == "":
+                pctErrorRed_ave = -1
+                pctErrorRed_std = -1
+            else:
+                pctErrorRed_ave = float(row[1]) # average
+                pctErrorRed_std = float(row[2]) # std (error or deviation?)
+            alResults[image_index] = {}
+            alResults[image_index]['ave'] = pctErrorRed_ave
+            alResults[image_index]['std'] = pctErrorRed_std
+    return alResults
+    
+def startAlReport(imdb,net):
+    fn = "alReport_{}_{}.csv".format(imdb.name,net.name)
+    fidAlReport = open(fn,"w+")
+    createAlReportHeader(fidAlReport,imdb)
+    return fidAlReport
+
+def createAlReportHeader(fidAlReport,imdb):
+    headerStr = "image_index,"
+    cls_probs_prefix = "cls_prob"
+    for idx in range(imdb.num_classes):
+        headerStr += "{}_{},".format(cls_probs_prefix,str(idx))
+    headerStr += "cls_prob_entropy"
+    av_prefix = "av"
+    for av_blobName in cfg.SAVE_ACTIVITY_VECTOR_BLOBS:
+        headerStr += "{}_{},".format(av_prefix,av_blobName)
+    headerStr += "%errorReduction\n"
+    fidAlReport.write(headerStr)
+
+def transformField(field,value):
+    if field == 'conv1_1':
+        return computeEntopy(value)
+    elif field == 'cls_prob':
+        return computeEntopy(value)
+    return value
+        
+def computeEntopy(value):
+    cvalue = value.copy()
+    cvalue += np.abs(np.min(cvalue))
+    cvalue /= cvalue.sum()
+    return -(cvalue * np.ma.log(cvalue)/np.log(np.e)).sum()
 
 
 

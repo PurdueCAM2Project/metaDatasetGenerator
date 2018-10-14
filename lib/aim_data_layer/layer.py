@@ -15,32 +15,22 @@ import caffe
 from utils.timer import Timer
 from core.config import cfg
 from datasets.ds_utils import convertFlattenedImageIndextoImageIndex
-from cls_data_layer.minibatch import get_minibatch
+from aim_data_layer.minibatch import get_minibatch
 import numpy as np
 import numpy.random as npr
 import yaml
 from multiprocessing import Process, Queue
 
-class ClsDataLayer(caffe.Layer):
-    """Fast R-CNN data layer used for training."""
+class AimDataLayer(caffe.Layer):
+    """
+    Activations In the Middle
+    Data layer
 
+    """
     def _shuffle_roidb_inds(self):
         """Randomly permute the training roidb."""
         self._perm = npr.permutation(np.arange(len(self._roidb)))
         self._cur = 0
-                
-            # print(np.where(self._records == 0))
-            # # print(self._roidb[np.where(self._records == 0)[0]][:10])
-            # print(np.where(self._records == 0))
-            # print(len(self._records))
-            # print(np.sum(self._records == 0))
-            # print(np.sum(self._records == 1))
-            # print(np.sum(self._records))
-            # print(self._records[:10])
-            # sys.exit()
-
-    def _balance_classes(self):
-        pass
 
     def _get_next_minibatch_inds(self):
         """Return the roidb indices for the next minibatch."""
@@ -61,15 +51,9 @@ class ClsDataLayer(caffe.Layer):
             return self._blob_queue.get()
         else:
             db_inds = self._get_next_minibatch_inds()
-            # ? is the "image_id" from a flattened imdb's roidb ?
-            # ^ yes. 09/10/18
-            # we assume records are *not flattened*
             minibatch_db = [self._roidb[i] for i in db_inds]
-            records_db = []
-            if self._records is not None:
-                records_db = [self._records[i] for i in db_inds]
-            # records_db = self._extractRecordDb(minibatch_db)
-            return get_minibatch(minibatch_db, records_db, self._num_classes)
+            records_db = [self._records[i] for i in db_inds]
+            return get_minibatch(minibatch_db, records_db, self._al_net, self._num_classes)
 
     def _extractRecordDb(self,minibatch_db):
         records_db = []
@@ -78,12 +62,13 @@ class ClsDataLayer(caffe.Layer):
             records_db.append(self._records[image_index][bbox_index])
         return records_db
 
-    def set_roidb(self, roidb, records):
+    def set_roidb(self, roidb, records, al_net):
         """Set the roidb to be used by this layer during training."""
         assert 'image_id' in roidb[0].keys()
         self._roidb = roidb
+        self._al_net = al_net
         self._records = records
-        if cfg.TRAIN.CLS.BALANCE_CLASSES and records is not None:
+        if cfg.TRAIN.CLS.BALANCE_CLASSES:
             # assume order is preserved in "extractRecordDb"
             self._records = np.array(self._extractRecordDb(self._roidb))
             neg = np.sum(self._records == 0)
@@ -105,8 +90,8 @@ class ClsDataLayer(caffe.Layer):
             elif pos <= 1.1*neg: # (given we failed the 1st cond.) the positives are too small
                 goal = neg - pos
                 pass # not here yet
-
         self._shuffle_roidb_inds()
+
         if cfg.TRAIN.USE_PREFETCH:
             self._blob_queue = Queue(10)
             self._prefetch_process = BlobFetcher(self._blob_queue,
@@ -124,7 +109,7 @@ class ClsDataLayer(caffe.Layer):
     def setup(self, bottom, top):
         """Setup the ClsDataLayer."""
 
-        self.name = "ClsDataLayer"
+        self.name = "AimDataLayer"
         # parse the layer parameter string, which must be valid YAML
         layer_params = yaml.load(self.param_str)
 
@@ -136,24 +121,22 @@ class ClsDataLayer(caffe.Layer):
         idx = 0
 
         top[idx].reshape(cfg.TRAIN.BATCH_SIZE, 3,
-                         cfg.CROPPED_IMAGE_SIZE,cfg.CROPPED_IMAGE_SIZE)
+                         cfg.AL_IMAGE_SIZE,cfg.AL_IMAGE_SIZE)
         self._name_to_top_map['data'] = idx
+        idx += 1
+
+        top[idx].reshape(cfg.TRAIN.BATCH_SIZE, 3,
+                         cfg.AL_IMAGE_SIZE,cfg.AL_IMAGE_SIZE)
+        self._name_to_top_map['avImage'] = idx
         idx += 1
 
         top[idx].reshape(cfg.TRAIN.BATCH_SIZE)
         self._name_to_top_map['labels'] = idx
         idx += 1
 
-        # if cfg.TRAIN.OBJ_DET.HAS_RPN:
-        #     top[idx].reshape(1)
-        #     self._name_to_top_map['im_info'] = idx
-        #     idx += 1
 
-
-        print 'ClsDataLayer: name_to_top:', self._name_to_top_map
+        print 'AlclsDataLayer: name_to_top:', self._name_to_top_map
         assert len(top) == len(self._name_to_top_map)
-
-
 
 
     def forward(self, bottom, top):
@@ -163,7 +146,7 @@ class ClsDataLayer(caffe.Layer):
         blobs = self._get_next_minibatch()
         self._blobs = blobs
         # print(timer.toc())
-        #print(blobs['data'].shape)
+        # print(blobs['data'].shape)
 
         for blob_name, blob in blobs.iteritems():
             top_ind = self._name_to_top_map[blob_name]

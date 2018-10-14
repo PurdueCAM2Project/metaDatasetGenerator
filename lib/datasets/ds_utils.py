@@ -359,9 +359,11 @@ def combineOnlyNewRoidbs(roidbs,pc):
 
 
 def loadEvaluationRecords(classname):
-    saveDir = osp.join(cfg.TP_FN_RECORDS_PATH,cfg.CALLING_DATASET_NAME)
+    #saveDir = osp.join(cfg.TP_FN_RECORDS_PATH,cfg.CALLING_DATASET_NAME)
+    saveDirPostfix = "{}-{}-default".format(cfg.CALLING_DATASET_NAME,cfg.CALLING_IMAGESET_NAME)
+    saveDir = osp.join(cfg.TP_FN_RECORDS_PATH,saveDirPostfix)
     savePath = osp.join(saveDir,"records_{}.pkl".format('det_{:s}').format(classname))
-    print("loading evalutation records from: {}".format(savePath))
+    print("loading evaluation records from: {}".format(savePath))
     with open(savePath, "rb") as f:
         records = pickle.load(f)
     return records

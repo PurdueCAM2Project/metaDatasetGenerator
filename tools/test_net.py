@@ -52,12 +52,12 @@ def parse_args():
     parser.add_argument('--rotate', dest='rotate',
                         help='how much should we rotate each image?',
                         default=0, type=int)
-    # params for active learning model
+    # params for model to which active learning is applied
     parser.add_argument('--al_def', dest='al_def',
-                        help='active learning model prototxt',
+                        help='model prototxt to which active learning is applied',
                         default=None, type=str)
     parser.add_argument('--al_net', dest='al_net',
-                        help='active learning model weights',
+                        help='model weights to which active learning is applied',
                         default=None, type=str)
 
     if len(sys.argv) == 1:

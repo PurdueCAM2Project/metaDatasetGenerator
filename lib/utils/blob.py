@@ -262,3 +262,14 @@ def save_blob_list_to_file(blob_list,append_str_l,vis=False):
         else:
             plt.imshow(img[:,:,::-1])
             plt.show()
+
+def createInfoBlob(im_data,im_scales):
+    # ensure normalization of image data
+    if np.max(im_data) > 1: # assume this means we haven't normalized
+        im_data /= 255 
+    im_info = {}
+    im_info['data'] = im_data
+    im_info['scales'] = im_scales
+    return im_info
+
+

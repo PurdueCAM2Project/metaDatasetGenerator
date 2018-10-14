@@ -11,7 +11,7 @@ import numpy as np
 import numpy.random as npr
 import cv2,sys
 from core.config import cfg
-from utils.blob import prep_im_for_blob, im_list_to_blob, _get_cropped_image_blob
+from utils.blob import prep_im_for_blob, im_list_to_blob, getRawImageBlob, getCroppedImageBlob, createInfoBlob
 from datasets.ds_utils import cropImageToAnnoRegion
 import matplotlib.pyplot as plt
 
@@ -26,11 +26,19 @@ def get_minibatch(roidb, records, num_classes):
         format(num_images, cfg.TRAIN.OBJ_DET.BATCH_SIZE)
 
     # Get the input image blob, formatted for caffe
-    im_blob, im_scales = _get_cropped_image_blob(roidb, records, random_scale_inds)
-    im_blob /= 255
+    if cfg.SUBTASK == "tp_fn":
+        im_data, im_scales = getCroppedImageBlob(roidb, records, random_scale_inds)
+    else:
+        im_data, im_scales = getRawImageBlob(roidb, records, random_scale_inds)
+    im_info = createInfoBlob(im_data,im_scales)
 
-    blobs = {'data': im_blob}
-    blobs['labels'] = np.array(records)
+
+    blobs = {'data': im_info['data']}
+    if cfg.SUBTASK == "tp_fn":
+        blobs['labels'] = np.array(records)
+    else:
+        blobs['labels'] = np.array([ elem['gt_classes'] for elem in roidb ])
+
     # blobs['im_info'] = np.array(
     #     [[im_blob.shape[2], im_blob.shape[3], im_scales[0]]],
     #     dtype=np.float32)

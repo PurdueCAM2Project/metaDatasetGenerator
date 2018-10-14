@@ -36,15 +36,17 @@ def get_minibatch(roidb, records, al_net, num_classes):
     # prepare the image info for creating the image with activations
     raw_im_info = createInfoBlob(raw_im_data,raw_im_scales)
     cropped_im_info = createInfoBlob(cropped_im_data,cropped_im_scales)
+    dataBlob = cropped_im_info['data']
 
     # create the image augmented with activations
-    im_blobs = prepareAlImageBlobFromRawImageBlob(raw_im_info,cropped_im_info,al_net)
+    avImageBlob = prepareAlImageBlobFromRawImageBlob(raw_im_info,cropped_im_info,al_net)
 
     # visual inspection of output
     # save_blob_list_to_file(im_blobs,[elem['image_id'] for elem in roidb])
 
     # prepare for input into the classifier
-    blobs = {'data': im_blobs}
+    blobs = {'data': dataBlob}
+    blobs = {'avImage': avImageBlob}
     blobs['labels'] = np.array(records)
 
     return blobs
@@ -58,24 +60,35 @@ def prepareAlImageBlobFromRawImageBlob(raw_im_info,cropped_im_info,al_net):
     batch_size = raw_im_blob_shape[0]
     output = network_forward_pass(al_net,raw_im_info,raw_im_info['scales'])
 
-    # create a container to fill
-    im_blobs = np.zeros((batch_size,cfg.COLOR_CHANNEL,
+    # grab the activation values
+    avImageBlob = np.zeros((batch_size,cfg.COLOR_CHANNEL,
                        cfg.AL_IMAGE_SIZE,cfg.AL_IMAGE_SIZE))
-    # 1) fill with cropped image
-    im_blobs[:,:,:cropped_im_blob_shape[2],:cropped_im_blob_shape[3]] = cropped_im_info['data']
-    
-    # 2) fill with activations
+    imgSize = cfg.AL_IMAGE_SIZE
+    avBatch = []
     for idx in range(cfg.BATCH_SIZE):
-        im_blob = im_blobs[idx,:,:,:][np.newaxis,:]
+        avList = []
         for layer_name in cfg.AL_CLS.LAYERS:
             activation_values = output[idx][layer_name].copy()
-            if layer_name == cfg.AL_CLS.LAYERS[2]:
-                fillImageWithActivationValues(activation_values,im_blob,cropped_im_blob_shape)
-            elif layer_name == cfg.AL_CLS.LAYERS[1]:
-                fillImageWithActivationValues_2(activation_values,im_blob,cropped_im_blob_shape)
-            elif layer_name == cfg.AL_CLS.LAYERS[0]:
-                fillImageWithActivationValues_3(activation_values,im_blob,cropped_im_blob_shape)
-    return im_blobs
+            avList.append(activation_values.ravel())
+        avImageBlob[idx,:,:,:] = formatActivationValueList(avList,imgSize)
+    return avImageBlob
+
+def formatActivationValueList(avList,imgSize):
+    goalLength = imgSize * imgSize * cfg.COLOR_CHANNEL
+    nLayers = len(avList)
+    # get equal amount from each
+    avListEqual = []
+    for layerAv in avList:
+        avListEqual.append(layerAv[:goalLength//nLayers])
+    # aggregate into one numpy array
+    avList = np.concatenate(avListEqual).ravel()
+    # fill with zeros    
+    toFill = goalLength - avList.size
+    assert toFill >= 0, "[aim_data_layer/minibatch.py: formatActivationValueList] too many activation values. goal: {} v.s. current: {}".format(goalLength,avList.size)
+    appendZeros = np.zeros(toFill)
+    avImage = np.concatenate([avList,appendZeros])
+    # reshape nad return
+    return avImage.reshape(cfg.COLOR_CHANNEL,imgSize,imgSize)
 
 def network_forward_pass(al_net,input_blobs,im_scales):
     output = []
@@ -149,7 +162,8 @@ def get_records(roidb,al_net):
 
     return correct
 
-def fillImageWithActivationValues(activation_values,im_blob,cropped_im_blob_shape):
+def fillImageWithActivationValues(activation_values,im_blob,
+                                  cropped_im_blob_shape,filledLimits):
     """
     CLEARLY, if we continue to pursue this project we MUST have a better
     program to fill the blob
@@ -161,9 +175,9 @@ def fillImageWithActivationValues(activation_values,im_blob,cropped_im_blob_shap
     av_vector += min(av_vector)
     av_vector /= max(av_vector)
 
-    start_x_im = cropped_im_blob_shape[2]
+    start_x_im = filledLimits[0]
     stop_x_im = cfg.AL_IMAGE_SIZE
-    start_y_im = 0
+    start_y_im = filledLimits[1]
     stop_y_im = cropped_im_blob_shape[2]
 
     start_av = 0
@@ -180,65 +194,6 @@ def fillImageWithActivationValues(activation_values,im_blob,cropped_im_blob_shap
     im_blob[:,:,start_y_im:stop_y_im,start_x_im:stop_x_im] = av_vector[start_av:stop_av].reshape(1,3,stop_y_im - start_y_im,stop_x_im - start_x_im)
     return stop_y_im,stop_x_im
     
-def fillImageWithActivationValues_2(activation_values,im_blob,cropped_im_blob_shape):
-    """
-    the "stupid" way to prove if this concept is worth pursuing
-    not worth our time to work on this if it's always bad anyway
-    """
-    av_vector = activation_values.ravel()
-
-    # we need to scale the av_vector to within [0,1]... for now
-    av_vector += min(av_vector)
-    av_vector /= max(av_vector)
-
-    start_y_im = cropped_im_blob_shape[2]
-    stop_y_im = cfg.AL_IMAGE_SIZE
-    start_x_im = 0
-    stop_x_im = cropped_im_blob_shape[2]
-
-    start_av = 0
-    stop_av = (stop_x_im - start_x_im) * (stop_y_im - start_y_im) * 3
-    # print(av_vector.shape)
-    # print(im_blob[:,:,start_y_im:stop_y_im,start_x_im:stop_x_im].shape)
-    # print(stop_av,len(av_vector))
-    if stop_av > len(av_vector):
-        # print("stop_av > len(av_vector)")
-        # fix y; change x 
-        len_av = len(av_vector)
-        stop_x_im = len_av // (3 * (stop_y_im - start_y_im)) + start_x_im
-        stop_av = (stop_y_im - start_y_im) * (stop_x_im - start_x_im) * 3
-    im_blob[:,:,start_y_im:stop_y_im,start_x_im:stop_x_im] = av_vector[start_av:stop_av].reshape(1,3,stop_y_im - start_y_im,stop_x_im - start_x_im)
-    return stop_y_im,stop_x_im
-
-def fillImageWithActivationValues_3(activation_values,im_blob,cropped_im_blob_shape):
-    """
-    the "stupid" way to prove if this concept is worth pursuing
-    not worth our time to work on this if it's always bad anyway
-    """
-    av_vector = activation_values.ravel()
-
-    # we need to scale the av_vector to within [0,1]... for now
-    av_vector += min(av_vector)
-    av_vector /= max(av_vector)
-
-    start_y_im = cropped_im_blob_shape[2]
-    stop_y_im = cfg.AL_IMAGE_SIZE
-    start_x_im = cropped_im_blob_shape[2]
-    stop_x_im = cfg.AL_IMAGE_SIZE
-
-    start_av = 0
-    stop_av = (stop_x_im - start_x_im) * (stop_y_im - start_y_im) * 3
-    # print(av_vector.shape)
-    # print(im_blob[:,:,start_y_im:stop_y_im,start_x_im:stop_x_im].shape)
-    # print(stop_av,len(av_vector))
-    if stop_av > len(av_vector):
-        # print("stop_av > len(av_vector)")
-        # fix y; change x 
-        len_av = len(av_vector)
-        stop_x_im = len_av // (3 * (stop_y_im - start_y_im)) + start_x_im
-        stop_av = (stop_y_im - start_y_im) * (stop_x_im - start_x_im) * 3
-    im_blob[:,:,start_y_im:stop_y_im,start_x_im:stop_x_im] = av_vector[start_av:stop_av].reshape(1,3,stop_y_im - start_y_im,stop_x_im - start_x_im)
-    return stop_y_im,stop_x_im
 
 def _sample_rois(roidb, fg_rois_per_image, rois_per_image, num_classes):
     """Generate a random sample of RoIs comprising foreground and background
